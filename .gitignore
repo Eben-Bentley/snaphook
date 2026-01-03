@@ -1,0 +1,9 @@
+snaphook
+snaphook.exe
+snaphook-*.exe
+*.swp
+*.swo
+*~
+.DS_Store
+.claude/
+nul
