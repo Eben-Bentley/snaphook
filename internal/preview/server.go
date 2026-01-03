@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+const (
+	maxHistorySize = 50
+	maxClients     = 5
+)
+
 var (
 	server           *http.Server
 	latestImage      string
@@ -25,11 +30,10 @@ var (
 	hotkeyChangeChan = make(chan string, 10)
 )
 
-func init() {
-	startServer()
-}
-
-func startServer() {
+func Start() {
+	if serverStarted {
+		return
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +236,7 @@ func startServer() {
             background: #2a2a2a;
             border-radius: 8px;
             overflow: hidden;
-            cursor: pointer;
+            position: relative;
             transition: transform 0.2s;
         }
         .thumbnail:hover {
@@ -242,6 +246,7 @@ func startServer() {
             width: 100%;
             height: 150px;
             object-fit: cover;
+            cursor: pointer;
         }
         .thumbnail .info {
             padding: 10px;
@@ -249,34 +254,97 @@ func startServer() {
             font-size: 12px;
             color: #888;
         }
-        .back-btn {
+        .delete-text {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #f44336;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 10;
+        }
+        .thumbnail:hover .delete-text {
+            opacity: 1;
+        }
+        .delete-text:hover {
+            background: #d32f2f;
+        }
+        .back-btn, .clear-btn {
             padding: 12px 24px;
-            background: #4CAF50;
             color: white;
             border: none;
             border-radius: 4px;
             font-size: 16px;
             cursor: pointer;
-            margin: 20px auto;
-            display: block;
+            margin: 10px;
+        }
+        .back-btn {
+            background: #4CAF50;
+        }
+        .back-btn:hover {
+            background: #45a049;
+        }
+        .clear-btn {
+            background: #f44336;
+        }
+        .clear-btn:hover {
+            background: #d32f2f;
+        }
+        .button-group {
+            text-align: center;
+            margin: 20px 0;
         }
     </style>
 </head>
 <body>
-    <h1>Screenshot History (` + fmt.Sprintf("%d", len(history)) + ` screenshots)</h1>
-    <button class="back-btn" onclick="window.location='/'">Back to Latest</button>
+    <h1>Screenshot History (` + fmt.Sprintf("%d/%d", len(history), maxHistorySize) + `)</h1>
+    <div class="button-group">
+        <button class="back-btn" onclick="window.location='/'">Back to Latest</button>
+        <button class="clear-btn" onclick="clearAll()">Clear All History</button>
+    </div>
     <div class="gallery">`
 
 		for i := len(history) - 1; i >= 0; i-- {
 			html += fmt.Sprintf(`
-        <div class="thumbnail" onclick="window.location='/?index=%d'">
-            <img src="/image?index=%d" alt="Screenshot %d">
+        <div class="thumbnail">
+            <img src="/image?index=%d" alt="Screenshot %d" onclick="window.location='/?index=%d'">
+            <div class="delete-text" onclick="deleteScreenshot(%d, event)">Delete</div>
             <div class="info">Screenshot #%d</div>
-        </div>`, i, i, i+1, i+1)
+        </div>`, i, i+1, i, i, i+1)
 		}
 
 		html += `
     </div>
+    <script>
+        function deleteScreenshot(index, event) {
+            event.stopPropagation();
+            fetch('/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'index=' + index
+            })
+            .then(r => r.json())
+            .then(() => window.location.reload())
+            .catch(err => alert('Failed to delete: ' + err));
+        }
+
+        function clearAll() {
+            if (confirm('Clear all screenshot history? This cannot be undone.')) {
+                fetch('/clear-all', {
+                    method: 'POST'
+                })
+                .then(r => r.json())
+                .then(() => window.location.reload())
+                .catch(err => alert('Failed to clear history: ' + err));
+            }
+        }
+    </script>
 </body>
 </html>`
 		w.Header().Set("Content-Type", "text/html")
@@ -460,6 +528,51 @@ func startServer() {
 		w.Write([]byte(html))
 	})
 
+	mux.HandleFunc("/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		indexStr := r.FormValue("index")
+		if indexStr == "" {
+			http.Error(w, "Missing index parameter", http.StatusBadRequest)
+			return
+		}
+
+		var index int
+		fmt.Sscanf(indexStr, "%d", &index)
+
+		imageMutex.Lock()
+		if index >= 0 && index < len(imageHistory) {
+			imagePath := imageHistory[index]
+			os.Remove(imagePath)
+			imageHistory = append(imageHistory[:index], imageHistory[index+1:]...)
+		}
+		imageMutex.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success": true}`))
+	})
+
+	mux.HandleFunc("/clear-all", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		imageMutex.Lock()
+		for _, imagePath := range imageHistory {
+			os.Remove(imagePath)
+		}
+		imageHistory = []string{}
+		latestImage = ""
+		imageMutex.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success": true}`))
+	})
+
 	mux.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
 		requestMutex.Lock()
 		lastRequest = time.Now()
@@ -479,10 +592,11 @@ func startServer() {
 		clientChan := make(chan string, 10)
 		clientsMutex.Lock()
 
-		for _, oldClient := range clients {
-			safeClose(oldClient)
+		if len(clients) >= maxClients {
+			safeClose(clients[0])
+			clients = clients[1:]
 		}
-		clients = []chan string{clientChan}
+		clients = append(clients, clientChan)
 		clientsMutex.Unlock()
 
 		defer func() {
@@ -529,6 +643,12 @@ func ShowInBrowser(imagePath string) error {
 	imageMutex.Lock()
 	latestImage = imagePath
 	imageHistory = append(imageHistory, imagePath)
+
+	if len(imageHistory) > maxHistorySize {
+		oldPath := imageHistory[0]
+		os.Remove(oldPath)
+		imageHistory = imageHistory[1:]
+	}
 	imageMutex.Unlock()
 
 	if !serverStarted {

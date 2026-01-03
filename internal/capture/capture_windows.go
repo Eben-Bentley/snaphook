@@ -5,6 +5,7 @@ package capture
 import (
 	"fmt"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -67,28 +68,51 @@ func captureScreen() (string, error) {
 	tmpDir := os.TempDir()
 	imagePath := filepath.Join(tmpDir, fmt.Sprintf("snapview-%d.png", time.Now().UnixNano()))
 
-	file, err := os.Create(imagePath)
+	tmpFile, err := os.Create(imagePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create image file: %w", err)
 	}
-	defer file.Close()
+	defer tmpFile.Close()
 
-	if err := png.Encode(file, img); err != nil {
-		return "", fmt.Errorf("failed to encode image: %w", err)
-	}
+	var writers []io.Writer
+	writers = append(writers, tmpFile)
 
+	var permFile *os.File
 	if autoSaveEnabled && autoSaveDir != "" {
 		timestamp := time.Now().Format("2006-01-02_15-04-05")
 		permanentPath := filepath.Join(autoSaveDir, fmt.Sprintf("screenshot_%s.png", timestamp))
-
-		permFile, err := os.Create(permanentPath)
+		permFile, err = os.Create(permanentPath)
 		if err == nil {
 			defer permFile.Close()
-
-			file.Seek(0, 0)
-			permFile.ReadFrom(file)
+			writers = append(writers, permFile)
 		}
 	}
 
+	encoder := &png.Encoder{
+		CompressionLevel: png.BestSpeed,
+	}
+
+	multiWriter := io.MultiWriter(writers...)
+	if err := encoder.Encode(multiWriter, img); err != nil {
+		return "", fmt.Errorf("failed to encode image: %w", err)
+	}
+
 	return imagePath, nil
+}
+
+func CleanupOldTempFiles() {
+	tmpDir := os.TempDir()
+	pattern := filepath.Join(tmpDir, "snapview-*.png")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return
+	}
+
+	now := time.Now()
+	for _, path := range matches {
+		info, err := os.Stat(path)
+		if err == nil && now.Sub(info.ModTime()) > 24*time.Hour {
+			os.Remove(path)
+		}
+	}
 }

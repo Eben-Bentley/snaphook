@@ -1,7 +1,5 @@
 package hotkey
 
-type Handler func()
-
 var currentHandler Handler
 
 func Register(hotkey string, handler Handler) error {

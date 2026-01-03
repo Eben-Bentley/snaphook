@@ -32,6 +32,8 @@ func onReady() {
 		currentConfig = &config.Config{Hotkey: "Ctrl+Shift+S"}
 	}
 
+	capture.CleanupOldTempFiles()
+
 	systray.SetTitle("SnapHook")
 	systray.SetTooltip("SnapHook - Press " + currentConfig.Hotkey + " to capture")
 
@@ -40,6 +42,7 @@ func onReady() {
 	systray.AddSeparator()
 
 	mViewPreview := systray.AddMenuItem("View Preview", "Open preview window in browser")
+	mEnablePreview := systray.AddMenuItemCheckbox("Enable Preview", "Enable browser preview for screenshots", currentConfig.EnablePreview)
 	systray.AddSeparator()
 
 	mCopyClipboard := systray.AddMenuItemCheckbox("Copy to Clipboard", "Copy screenshot to clipboard", currentConfig.CopyToClipboard)
@@ -62,6 +65,12 @@ func onReady() {
 		} else {
 			capture.SetAutoSave(true, config.GetAutoSaveDir())
 		}
+	}
+
+	if currentConfig.EnablePreview {
+		preview.Start()
+	} else {
+		mViewPreview.Disable()
 	}
 
 	go func() {
@@ -93,6 +102,21 @@ func onReady() {
 						capture.SetAutoSave(true, config.GetAutoSaveDir())
 						mAutoSave.Check()
 					}
+				}
+				if err := config.Save(currentConfig); err != nil {
+					log.Printf("Failed to save config: %v", err)
+				}
+			case <-mEnablePreview.ClickedCh:
+				if mEnablePreview.Checked() {
+					currentConfig.EnablePreview = false
+					mEnablePreview.Uncheck()
+					preview.Shutdown()
+					mViewPreview.Disable()
+				} else {
+					currentConfig.EnablePreview = true
+					mEnablePreview.Check()
+					preview.Start()
+					mViewPreview.Enable()
 				}
 				if err := config.Save(currentConfig); err != nil {
 					log.Printf("Failed to save config: %v", err)
@@ -157,6 +181,8 @@ func handleScreenshot() {
 		if currentConfig.CopyToClipboard {
 			go clipboard.CopyImage(imagePath)
 		}
-		preview.Show(imagePath)
+		if currentConfig.EnablePreview {
+			preview.Show(imagePath)
+		}
 	}()
 }

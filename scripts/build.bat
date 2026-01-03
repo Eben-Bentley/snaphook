@@ -1,8 +1,9 @@
 @echo off
+cd /d "%~dp0.."
 echo Building SnapHook for Windows...
 echo.
 
-go build -ldflags "-H=windowsgui -s -w" -o snaphook.exe ./cmd/snapview
+go build -tags windows -trimpath -ldflags "-H=windowsgui -s -w -buildid=" -gcflags "all=-dwarf=false" -o bin/snaphook.exe ./cmd/snaphook
 
 if %errorlevel% equ 0 (
     echo.
@@ -10,7 +11,7 @@ if %errorlevel% equ 0 (
     echo Build successful!
     echo ========================================
     echo.
-    echo Created: snaphook.exe
+    echo Created: bin\snaphook.exe
     echo.
     echo To run:
     echo   1. Double-click snaphook.exe
