@@ -6,12 +6,6 @@ import (
 	"path/filepath"
 )
 
-type Config struct {
-	Hotkey          string `json:"hotkey"`
-	AutoSave        bool   `json:"auto_save"`
-	CopyToClipboard bool   `json:"copy_to_clipboard"`
-}
-
 func Load() (*Config, error) {
 	configPath := getConfigPath()
 

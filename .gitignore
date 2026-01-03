@@ -1,9 +1,6 @@
-snaphook
-snaphook.exe
-snaphook-*.exe
+bin/
 *.swp
 *.swo
 *~
 .DS_Store
 .claude/
-nul
