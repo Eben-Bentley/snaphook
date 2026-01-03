@@ -734,6 +734,7 @@ func safeClose(ch chan string) {
 func Shutdown() {
 	if server != nil {
 		server.Close()
+		serverStarted = false
 	}
 }
 
