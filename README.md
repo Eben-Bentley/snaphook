@@ -17,11 +17,11 @@ Screenshots are automatically copied to your clipboard for immediate pasting. To
 **Auto-Save to Pictures**
 Optionally save all screenshots to `Pictures\SnapHook` with timestamped filenames for permanent storage.
 
-**Live Browser Preview**
-View captures instantly in a clean, dark-themed web interface with session history and one-click saving.
+**Live Browser Preview (Optional)**
+Enable preview mode for super fast visibility of your screenshots! View captures instantly in a clean, dark-themed web interface with session history and one-click saving. Toggle on/off from the system tray.
 
 **Configurable Hotkeys**
-Default hotkey is Ctrl+Shift+S. Configurable via `~/.config/snaphook/config.json`.
+Default hotkey is Ctrl+Shift+S.
 
 **System Tray Integration**
 Minimal UI - runs silently in your system tray with right-click access to all settings.
@@ -55,20 +55,12 @@ Download `snaphook.exe` and run. No installation or dependencies required.
 1. Launch `snaphook.exe`
 2. Look for the icon in your system tray
 3. Press **Ctrl+Shift+S** to capture the monitor where your cursor is located
-4. Screenshot is copied to clipboard and opens in browser preview
-5. Right-click system tray icon for settings (Auto-Save, Copy to Clipboard, Start on Boot)
-
-## Configuration
-
-Settings stored in `%USERPROFILE%\.config\snaphook\config.json`:
-
-```json
-{
-  "hotkey": "Ctrl+Shift+S",
-  "auto_save": false,
-  "copy_to_clipboard": true
-}
-```
+4. Screenshot is copied to clipboard instantly
+5. Right-click system tray icon for settings:
+   - **Enable Preview** - Turn on for super fast screenshot visibility in your browser
+   - **Copy to Clipboard** - Automatically copy screenshots
+   - **Auto-Save** - Save to Pictures\SnapHook
+   - **Start on Boot** - Launch with Windows
 
 ## License
 
