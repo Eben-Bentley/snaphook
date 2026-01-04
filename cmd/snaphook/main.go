@@ -22,6 +22,7 @@ var (
 	screenshotMutex      sync.Mutex
 	screenshotInProgress bool
 	currentConfig        *config.Config
+	configMutex          sync.RWMutex
 	instanceMutex        windows.Handle
 )
 
@@ -58,18 +59,25 @@ func onReady() {
 
 	systray.SetIcon(assets.IconData)
 	systray.SetTitle("SnapHook")
-	systray.SetTooltip("SnapHook - Press " + currentConfig.Hotkey + " to capture")
+	configMutex.RLock()
+	hotkeyStr := currentConfig.Hotkey
+	enablePreview := currentConfig.EnablePreview
+	copyToClipboard := currentConfig.CopyToClipboard
+	autoSave := currentConfig.AutoSave
+	configMutex.RUnlock()
 
-	mHotkey := systray.AddMenuItem("Hotkey: "+currentConfig.Hotkey, "Current screenshot hotkey")
+	systray.SetTooltip("SnapHook - Press " + hotkeyStr + " to capture")
+
+	mHotkey := systray.AddMenuItem("Hotkey: "+hotkeyStr, "Current screenshot hotkey")
 	mHotkey.Disable()
 	systray.AddSeparator()
 
 	mViewPreview := systray.AddMenuItem("View Preview", "Open preview window in browser")
-	mEnablePreview := systray.AddMenuItemCheckbox("Enable Preview", "Enable browser preview for screenshots", currentConfig.EnablePreview)
+	mEnablePreview := systray.AddMenuItemCheckbox("Enable Preview", "Enable browser preview for screenshots", enablePreview)
 	systray.AddSeparator()
 
-	mCopyClipboard := systray.AddMenuItemCheckbox("Copy to Clipboard", "Copy screenshot to clipboard", currentConfig.CopyToClipboard)
-	mAutoSave := systray.AddMenuItemCheckbox("Auto-Save", "Save screenshots to Pictures/SnapHook", currentConfig.AutoSave)
+	mCopyClipboard := systray.AddMenuItemCheckbox("Copy to Clipboard", "Copy screenshot to clipboard", copyToClipboard)
+	mAutoSave := systray.AddMenuItemCheckbox("Auto-Save", "Save screenshots to Pictures/SnapHook", autoSave)
 	systray.AddSeparator()
 
 	mStartup := systray.AddMenuItemCheckbox("Start on Boot", "Start SnapView when Windows starts", startup.IsEnabled())
@@ -77,12 +85,12 @@ func onReady() {
 
 	mQuit := systray.AddMenuItem("Quit", "Quit SnapView")
 
-	if err := hotkey.Register(currentConfig.Hotkey, handleScreenshot); err != nil {
+	if err := hotkey.Register(hotkeyStr, handleScreenshot); err != nil {
 		log.Printf("Warning: Failed to register hotkey: %v", err)
 		log.Println("The application will still run, but you'll need to manually configure the hotkey in your system settings.")
 	}
 
-	if currentConfig.AutoSave {
+	if autoSave {
 		if err := config.EnsureAutoSaveDir(); err != nil {
 			log.Printf("Failed to create auto-save directory: %v", err)
 		} else {
@@ -90,7 +98,7 @@ func onReady() {
 		}
 	}
 
-	if currentConfig.EnablePreview {
+	if enablePreview {
 		preview.Start()
 	} else {
 		mViewPreview.Disable()
@@ -102,6 +110,7 @@ func onReady() {
 			case <-mViewPreview.ClickedCh:
 				preview.OpenBrowser()
 			case <-mCopyClipboard.ClickedCh:
+				configMutex.Lock()
 				if mCopyClipboard.Checked() {
 					currentConfig.CopyToClipboard = false
 					mCopyClipboard.Uncheck()
@@ -112,7 +121,9 @@ func onReady() {
 				if err := config.Save(currentConfig); err != nil {
 					log.Printf("Failed to save config: %v", err)
 				}
+				configMutex.Unlock()
 			case <-mAutoSave.ClickedCh:
+				configMutex.Lock()
 				if mAutoSave.Checked() {
 					currentConfig.AutoSave = false
 					capture.SetAutoSave(false, "")
@@ -129,7 +140,9 @@ func onReady() {
 				if err := config.Save(currentConfig); err != nil {
 					log.Printf("Failed to save config: %v", err)
 				}
+				configMutex.Unlock()
 			case <-mEnablePreview.ClickedCh:
+				configMutex.Lock()
 				if mEnablePreview.Checked() {
 					currentConfig.EnablePreview = false
 					mEnablePreview.Uncheck()
@@ -144,6 +157,7 @@ func onReady() {
 				if err := config.Save(currentConfig); err != nil {
 					log.Printf("Failed to save config: %v", err)
 				}
+				configMutex.Unlock()
 			case <-mStartup.ClickedCh:
 				if mStartup.Checked() {
 					if err := startup.Disable(); err != nil {
@@ -201,10 +215,15 @@ func handleScreenshot() {
 		screenshotMutex.Unlock()
 		log.Println("Screenshot captured - ready for next screenshot")
 
-		if currentConfig.CopyToClipboard {
+		configMutex.RLock()
+		copyToClipboard := currentConfig.CopyToClipboard
+		enablePreview := currentConfig.EnablePreview
+		configMutex.RUnlock()
+
+		if copyToClipboard {
 			go clipboard.CopyImage(imagePath)
 		}
-		if currentConfig.EnablePreview {
+		if enablePreview {
 			preview.Show(imagePath)
 		}
 	}()

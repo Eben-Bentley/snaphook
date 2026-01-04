@@ -78,9 +78,10 @@ func captureScreen() (string, error) {
 	writers = append(writers, tmpFile)
 
 	var permFile *os.File
-	if autoSaveEnabled && autoSaveDir != "" {
+	enabled, saveDir := getAutoSaveConfig()
+	if enabled && saveDir != "" {
 		timestamp := time.Now().Format("2006-01-02_15-04-05")
-		permanentPath := filepath.Join(autoSaveDir, fmt.Sprintf("screenshot_%s.png", timestamp))
+		permanentPath := filepath.Join(saveDir, fmt.Sprintf("screenshot_%s.png", timestamp))
 		permFile, err = os.Create(permanentPath)
 		if err == nil {
 			defer permFile.Close()

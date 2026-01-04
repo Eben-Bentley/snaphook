@@ -1,13 +1,27 @@
 package capture
 
-import "runtime"
+import (
+	"runtime"
+	"sync"
+)
 
-var autoSaveEnabled bool
-var autoSaveDir string
+var (
+	autoSaveEnabled bool
+	autoSaveDir     string
+	autoSaveMutex   sync.RWMutex
+)
 
 func SetAutoSave(enabled bool, dir string) {
+	autoSaveMutex.Lock()
+	defer autoSaveMutex.Unlock()
 	autoSaveEnabled = enabled
 	autoSaveDir = dir
+}
+
+func getAutoSaveConfig() (bool, string) {
+	autoSaveMutex.RLock()
+	defer autoSaveMutex.RUnlock()
+	return autoSaveEnabled, autoSaveDir
 }
 
 func CaptureScreen() (string, error) {

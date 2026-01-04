@@ -5,7 +5,9 @@ package hotkey
 import (
 	"fmt"
 	"log"
+	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -35,6 +37,7 @@ var (
 	isRunning    = false
 	threadID     uint32
 	loopExitChan chan struct{}
+	hotkeyMutex  sync.Mutex
 )
 
 func parseHotkey(hotkey string) (uint32, uint32, error) {
@@ -64,8 +67,10 @@ func register(hotkey string) error {
 	}
 
 	log.Printf("Attempting to register hotkey: %s", hotkey)
+	hotkeyMutex.Lock()
 	isRunning = true
 	loopExitChan = make(chan struct{})
+	hotkeyMutex.Unlock()
 
 	resultChan := make(chan error, 1)
 
@@ -95,7 +100,9 @@ func register(hotkey string) error {
 
 func messageLoop() {
 	ret, _, _ := procGetCurrentThreadId.Call()
+	hotkeyMutex.Lock()
 	threadID = uint32(ret)
+	hotkeyMutex.Unlock()
 	log.Printf("Hotkey message loop started (threadID: %d)", threadID)
 
 	msg := &MSG{}
@@ -127,18 +134,29 @@ func messageLoop() {
 }
 
 func unregister() {
+	hotkeyMutex.Lock()
 	if !isRunning {
+		hotkeyMutex.Unlock()
 		return
 	}
 
 	isRunning = false
+	tid := threadID
+	exitChan := loopExitChan
+	hotkeyMutex.Unlock()
+
 	procUnregisterHotKey.Call(0, uintptr(hotkeyID))
 
-	if threadID != 0 {
-		procPostThreadMessage.Call(uintptr(threadID), WM_QUIT, 0, 0)
+	if tid != 0 {
+		procPostThreadMessage.Call(uintptr(tid), WM_QUIT, 0, 0)
 	}
 
-	if loopExitChan != nil {
-		<-loopExitChan
+	if exitChan != nil {
+		select {
+		case <-exitChan:
+			log.Println("Hotkey message loop exited cleanly")
+		case <-time.After(3 * time.Second):
+			log.Println("Warning: Hotkey message loop did not exit within timeout")
+		}
 	}
 }

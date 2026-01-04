@@ -1,6 +1,7 @@
 package preview
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +24,7 @@ var (
 	imageHistory     []string
 	imageMutex       sync.RWMutex
 	serverStarted    bool
+	serverMutex      sync.RWMutex
 	serverURL        = "http://localhost:8765"
 	lastRequest      time.Time
 	requestMutex     sync.RWMutex
@@ -32,7 +34,9 @@ var (
 )
 
 func Start() {
+	serverMutex.Lock()
 	if serverStarted {
+		serverMutex.Unlock()
 		return
 	}
 	mux := http.NewServeMux()
@@ -638,6 +642,7 @@ func Start() {
 	}()
 
 	serverStarted = true
+	serverMutex.Unlock()
 }
 
 func ShowInBrowser(imagePath string) error {
@@ -652,7 +657,11 @@ func ShowInBrowser(imagePath string) error {
 	}
 	imageMutex.Unlock()
 
-	if !serverStarted {
+	serverMutex.RLock()
+	started := serverStarted
+	serverMutex.RUnlock()
+
+	if !started {
 		return fmt.Errorf("preview server not started")
 	}
 
@@ -725,7 +734,9 @@ func openBrowserWindow() {
 
 		if err := cmd.Start(); err != nil {
 			fmt.Printf("Failed to open browser: %v\n", err)
+			return
 		}
+		cmd.Wait()
 	}()
 }
 
@@ -737,11 +748,15 @@ func safeClose(ch chan string) {
 }
 
 func Shutdown() {
+	serverMutex.Lock()
 	if server != nil {
-		server.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		server.Shutdown(ctx)
 		server = nil
 		serverStarted = false
 	}
+	serverMutex.Unlock()
 
 	clientsMutex.Lock()
 	for _, ch := range clients {
@@ -768,12 +783,20 @@ func OpenSettings() {
 		switch runtime.GOOS {
 		case "windows":
 			cmd = exec.Command("cmd", "/c", "start", serverURL+"/settings")
+			cmd.SysProcAttr = &syscall.SysProcAttr{
+				HideWindow:    true,
+				CreationFlags: 0x08000000,
+			}
 		case "darwin":
 			cmd = exec.Command("open", serverURL+"/settings")
 		default:
 			cmd = exec.Command("xdg-open", serverURL+"/settings")
 		}
-		cmd.Start()
+		if err := cmd.Start(); err != nil {
+			fmt.Printf("Failed to open settings: %v\n", err)
+			return
+		}
+		cmd.Wait()
 	}()
 }
 

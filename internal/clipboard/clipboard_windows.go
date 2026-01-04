@@ -24,6 +24,7 @@ var (
 	procGlobalAlloc      = kernel32.NewProc("GlobalAlloc")
 	procGlobalLock       = kernel32.NewProc("GlobalLock")
 	procGlobalUnlock     = kernel32.NewProc("GlobalUnlock")
+	procGlobalFree       = kernel32.NewProc("GlobalFree")
 )
 
 const (
@@ -86,6 +87,7 @@ func copyImage(imagePath string) error {
 
 	ret, _, _ = procSetClipboardData.Call(CF_DIB, hMem)
 	if ret == 0 {
+		procGlobalFree.Call(hMem)
 		return fmt.Errorf("failed to set clipboard data")
 	}
 
