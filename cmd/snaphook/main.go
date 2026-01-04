@@ -2,9 +2,12 @@ package main
 
 import (
 	"log"
+	"os"
 	"sync"
+	"syscall"
 
 	"github.com/getlantern/systray"
+	"golang.org/x/sys/windows"
 
 	"snaphook/internal/assets"
 	"snaphook/internal/capture"
@@ -19,9 +22,27 @@ var (
 	screenshotMutex      sync.Mutex
 	screenshotInProgress bool
 	currentConfig        *config.Config
+	instanceMutex        windows.Handle
 )
 
 func main() {
+	mutexName, err := syscall.UTF16PtrFromString("Global\\SnapHook-SingleInstance-Mutex")
+	if err != nil {
+		log.Fatalf("Failed to create mutex name: %v", err)
+	}
+
+	instanceMutex, err = windows.CreateMutex(nil, false, mutexName)
+	if err != nil {
+		lastErr := windows.GetLastError()
+		if lastErr == windows.ERROR_ALREADY_EXISTS || err.Error() == "Cannot create a file when that file already exists." {
+			log.Println("Another instance of SnapHook is already running")
+			os.Exit(1)
+		}
+		log.Fatalf("Failed to create mutex: %v", err)
+	}
+
+	defer windows.CloseHandle(instanceMutex)
+
 	systray.Run(onReady, onExit)
 }
 
