@@ -6,6 +6,7 @@ import (
 
 	"github.com/getlantern/systray"
 
+	"snaphook/internal/assets"
 	"snaphook/internal/capture"
 	"snaphook/internal/clipboard"
 	"snaphook/internal/config"
@@ -34,6 +35,7 @@ func onReady() {
 
 	capture.CleanupOldTempFiles()
 
+	systray.SetIcon(assets.IconData)
 	systray.SetTitle("SnapHook")
 	systray.SetTooltip("SnapHook - Press " + currentConfig.Hotkey + " to capture")
 
