@@ -43,8 +43,6 @@ Optional Windows startup integration for always-available screenshots.
 - **Concurrent Design** - Screenshot capture, clipboard copy, and browser preview run in parallel goroutines
 - **Non-Blocking Operations** - Mutex-controlled screenshot flow allows rapid consecutive captures
 - **Zero External Dependencies** - Single executable, no installation required
-- **Lightweight** - ~7MB binary, <50MB RAM usage
-- **Instant Response** - Optimized for sub-100ms capture-to-clipboard time
 
 ## Installation
 
