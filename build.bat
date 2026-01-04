@@ -2,7 +2,7 @@
 echo Building SnapHook for Windows...
 echo.
 
-go build -ldflags "-H=windowsgui -s -w" -o snaphook.exe ./cmd/snapview
+go build -ldflags "-H=windowsgui -s -w" -o snaphook.exe ./cmd/snaphook
 
 if %errorlevel% equ 0 (
     echo.

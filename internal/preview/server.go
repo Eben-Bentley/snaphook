@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"runtime"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -712,6 +713,10 @@ func openBrowserWindow() {
 		switch runtime.GOOS {
 		case "windows":
 			cmd = exec.Command("cmd", "/c", "start", serverURL)
+			cmd.SysProcAttr = &syscall.SysProcAttr{
+				HideWindow:    true,
+				CreationFlags: 0x08000000,
+			}
 		case "darwin":
 			cmd = exec.Command("open", serverURL)
 		default:
@@ -734,8 +739,25 @@ func safeClose(ch chan string) {
 func Shutdown() {
 	if server != nil {
 		server.Close()
+		server = nil
 		serverStarted = false
 	}
+
+	clientsMutex.Lock()
+	for _, ch := range clients {
+		safeClose(ch)
+	}
+	clients = nil
+	clientsMutex.Unlock()
+
+	browserMutex.Lock()
+	browserOpened = false
+	browserMutex.Unlock()
+
+	imageMutex.Lock()
+	latestImage = ""
+	imageHistory = nil
+	imageMutex.Unlock()
 }
 
 func OpenSettings() {
